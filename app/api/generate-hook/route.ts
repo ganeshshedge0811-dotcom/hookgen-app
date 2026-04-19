@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
@@ -47,9 +48,9 @@ export async function POST(request: NextRequest) {
     const hook = data.candidates[0].content.parts[0].text;
 
     return NextResponse.json({ hook });
-  } catch (err: any) {
+  } catch (err: unknown) {
     return NextResponse.json(
-      { error: err.message || "Unknown error occurred" },
+      { error: err instanceof Error ? err.message : "Unknown error occurred" },
       { status: 500 }
     );
   }
