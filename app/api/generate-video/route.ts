@@ -10,6 +10,10 @@ const MAX_POLL_MS = 3 * 60 * 1_000; // 3 minutes
 export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
+  if (!process.env.REPLICATE_API_TOKEN) {
+    return NextResponse.json({ error: 'REPLICATE_API_TOKEN not configured' }, { status: 500 });
+  }
+
   // ── Parse & validate body ────────────────────────────────
   let body: { hook?: string };
 
@@ -33,14 +37,6 @@ export async function POST(request: NextRequest) {
 
   // ── Validate API token ───────────────────────────────────
   const token = process.env.REPLICATE_API_TOKEN;
-
-  if (!token) {
-    console.error("REPLICATE_API_TOKEN is not set in environment variables.");
-    return NextResponse.json(
-      { error: "Server configuration error. Please try again later." },
-      { status: 500 }
-    );
-  }
 
   // ── Create prediction ────────────────────────────────────
   const prompt = `Cinematic 2-3 second vertical video (9:16), dynamic motion, no text, vibrant colors. Scene: ${hook}`;
