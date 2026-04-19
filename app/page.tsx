@@ -312,6 +312,10 @@ export default function HomePage() {
       }
 
       setResult({ script: data.hook });
+      
+      // Temporarily bypass payment gate for testing
+      setPaid(true);
+      startVideoGeneration(data.hook);
     } catch (err) {
       setError(
         err instanceof Error
@@ -554,6 +558,7 @@ export default function HomePage() {
                 )}
 
                 {/* ── Video: Payment gate (before payment) ── */}
+                {/* TEMPORARILY DISABLED FOR TESTING
                 {!paid && !videoLoading && !videoUrl && !videoError && (
                   <div className="relative aspect-[9/16] max-h-[400px] w-full rounded-xl bg-gradient-to-b from-amber-500/[0.04] via-white/[0.02] to-white/[0.01] border border-amber-500/[0.15] flex flex-col items-center justify-center gap-5 px-6 overflow-hidden">
                     <div className="w-14 h-14 rounded-full bg-amber-500/[0.1] border border-amber-500/20 flex items-center justify-center">
@@ -599,6 +604,7 @@ export default function HomePage() {
                     <p className="text-[10px] text-white/15">Secured by Razorpay</p>
                   </div>
                 )}
+                */}
               </ResultCard>
             </div>
 
