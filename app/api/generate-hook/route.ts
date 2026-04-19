@@ -1,11 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
+import Groq from 'groq-sdk';
+
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 export async function POST(request: NextRequest) {
-  if (!process.env.GEMINI_API_KEY) {
-    return NextResponse.json({ error: 'GEMINI_API_KEY not configured' }, { status: 500 });
-  }
-
   try {
     const body = await request.json();
     const idea = body.idea?.trim();
@@ -17,36 +16,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
-    
-    const geminiRes = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [{ text: 'Write one viral hook for this idea, max 15 words, shocking and curiosity-driven: ' + idea }],
-          },
-        ],
-      }),
+    const completion = await groq.chat.completions.create({
+      messages: [{ role: 'user', content: 'Write one viral hook for this idea, max 15 words, shocking and curiosity-driven, no hashtags, just the hook text: ' + idea }],
+      model: 'llama-3.1-8b-instant'
     });
-
-    if (!geminiRes.ok) {
-      const errData = await geminiRes.json().catch(() => null);
-      const errorMessage =
-        errData?.error?.message ||
-        errData?.message ||
-        `Gemini API error ${geminiRes.status}: Failed to generate hook.`;
-      
-      return NextResponse.json(
-        { error: errorMessage, details: errData },
-        { status: 500 }
-      );
-    }
-
-    const data = await geminiRes.json();
-    const hook = data.candidates[0].content.parts[0].text;
-
+    
+    const hook = completion.choices[0].message.content;
     return NextResponse.json({ hook });
   } catch (err: unknown) {
     return NextResponse.json(
