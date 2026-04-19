@@ -3,32 +3,6 @@
 import { useState, useCallback } from "react";
 
 /* ──────────────────────────────────────────────
-   Razorpay Checkout type (loaded via script tag)
-   ────────────────────────────────────────────── */
-interface RazorpayOptions {
-  key: string;
-  amount: number;
-  currency: string;
-  name: string;
-  description: string;
-  order_id: string;
-  handler: (response: {
-    razorpay_order_id: string;
-    razorpay_payment_id: string;
-    razorpay_signature: string;
-  }) => void;
-  prefill?: { name?: string; email?: string; contact?: string };
-  theme?: { color?: string };
-  modal?: { ondismiss?: () => void };
-}
-
-declare global {
-  interface Window {
-    Razorpay: new (options: RazorpayOptions) => { open: () => void };
-  }
-}
-
-/* ──────────────────────────────────────────────
    Spinner Component
    ────────────────────────────────────────────── */
 function Spinner({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
@@ -116,9 +90,6 @@ export default function HomePage() {
   const [videoLoading, setVideoLoading] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
-  const [paid, setPaid] = useState(false);
-  const [paymentLoading, setPaymentLoading] = useState(false);
-  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   /* ── Reset everything ──────────────────────────────── */
   const handleReset = useCallback(() => {
@@ -130,9 +101,6 @@ export default function HomePage() {
     setVideoLoading(false);
     setVideoError(null);
     setElapsed(0);
-    setPaid(false);
-    setPaymentLoading(false);
-    setPaymentError(null);
   }, []);
 
   /* ── Download video helper ─────────────────────────── */
@@ -155,20 +123,6 @@ export default function HomePage() {
     }
   }, [videoUrl]);
 
-  /* ── Load Razorpay checkout.js ─────────────────────── */
-  const loadRazorpayScript = useCallback((): Promise<boolean> => {
-    return new Promise((resolve) => {
-      if (typeof window !== "undefined" && window.Razorpay) {
-        resolve(true);
-        return;
-      }
-      const script = document.createElement("script");
-      script.src = "https://checkout.razorpay.com/v1/checkout.js";
-      script.onload = () => resolve(true);
-      script.onerror = () => resolve(false);
-      document.body.appendChild(script);
-    });
-  }, []);
 
   /* ── Start video generation (called after payment) ─── */
   const startVideoGeneration = useCallback(async (hook: string) => {
@@ -207,82 +161,6 @@ export default function HomePage() {
     }
   }, []);
 
-  /* ── Handle Razorpay payment ───────────────────────── */
-  const handlePayment = useCallback(async () => {
-    if (!result) return;
-
-    setPaymentLoading(true);
-    setPaymentError(null);
-
-    try {
-      const loaded = await loadRazorpayScript();
-      if (!loaded) throw new Error("Failed to load payment gateway. Please refresh and try again.");
-
-      const orderRes = await fetch("/api/create-order", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: 9900 }),
-      });
-
-      const orderData = await orderRes.json();
-
-      if (!orderRes.ok) {
-        throw new Error(orderData.error || "Failed to create payment order.");
-      }
-
-      const options: RazorpayOptions = {
-        key: orderData.keyId,
-        amount: orderData.amount,
-        currency: orderData.currency,
-        name: "HookGen",
-        description: "Unlock Your Hook Video",
-        order_id: orderData.orderId,
-        handler: async (response) => {
-          try {
-            const verifyRes = await fetch("/api/verify-payment", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-              }),
-            });
-
-            const verifyData = await verifyRes.json();
-
-            if (!verifyRes.ok || !verifyData.success) {
-              throw new Error(verifyData.error || "Payment verification failed.");
-            }
-
-            setPaid(true);
-            setPaymentLoading(false);
-            startVideoGeneration(result.script);
-          } catch (err) {
-            setPaymentError(
-              err instanceof Error ? err.message : "Payment verification failed."
-            );
-            setPaymentLoading(false);
-          }
-        },
-        prefill: {},
-        theme: { color: "#F59E0B" },
-        modal: {
-          ondismiss: () => {
-            setPaymentLoading(false);
-          },
-        },
-      };
-
-      const rzp = new window.Razorpay(options);
-      rzp.open();
-    } catch (err) {
-      setPaymentError(
-        err instanceof Error ? err.message : "Payment failed. Please try again."
-      );
-      setPaymentLoading(false);
-    }
-  }, [result, loadRazorpayScript, startVideoGeneration]);
 
   /* ── Generate hook text (Phase 1 only) ─────────────── */
   const handleGenerate = async () => {
@@ -294,8 +172,6 @@ export default function HomePage() {
     setVideoUrl(null);
     setVideoLoading(false);
     setVideoError(null);
-    setPaid(false);
-    setPaymentError(null);
     setElapsed(0);
 
     try {
@@ -313,8 +189,6 @@ export default function HomePage() {
 
       setResult({ script: data.hook });
       
-      // Temporarily bypass payment gate for testing
-      setPaid(true);
       startVideoGeneration(data.hook);
     } catch (err) {
       setError(
@@ -556,55 +430,6 @@ export default function HomePage() {
                     </button>
                   </div>
                 )}
-
-                {/* ── Video: Payment gate (before payment) ── */}
-                {/* TEMPORARILY DISABLED FOR TESTING
-                {!paid && !videoLoading && !videoUrl && !videoError && (
-                  <div className="relative aspect-[9/16] max-h-[400px] w-full rounded-xl bg-gradient-to-b from-amber-500/[0.04] via-white/[0.02] to-white/[0.01] border border-amber-500/[0.15] flex flex-col items-center justify-center gap-5 px-6 overflow-hidden">
-                    <div className="w-14 h-14 rounded-full bg-amber-500/[0.1] border border-amber-500/20 flex items-center justify-center">
-                      <svg className="w-7 h-7 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
-                      </svg>
-                    </div>
-                    <div className="text-center space-y-1.5">
-                      <p className="text-lg font-semibold text-white/80">Unlock your video for ₹99</p>
-                      <p className="text-xs text-white/30 leading-relaxed">AI-generated cinematic video<br />ready for Instagram & YouTube</p>
-                    </div>
-                    {paymentError && (
-                      <p className="text-xs text-red-400 text-center">{paymentError}</p>
-                    )}
-                    <button
-                      id="pay-now-btn"
-                      onClick={handlePayment}
-                      disabled={paymentLoading}
-                      className={`
-                        w-full max-w-[200px] py-3 px-6 rounded-xl text-sm font-semibold tracking-wide
-                        transition-all duration-300 ease-out
-                        flex items-center justify-center gap-2
-                        ${paymentLoading
-                          ? "bg-white/[0.06] text-white/30 cursor-not-allowed border border-white/[0.06]"
-                          : "bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white shadow-lg shadow-amber-500/20 hover:shadow-amber-500/40 hover:scale-[1.02] active:scale-[0.98]"
-                        }
-                      `}
-                    >
-                      {paymentLoading ? (
-                        <>
-                          <Spinner size="sm" />
-                          <span>Processing…</span>
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z" />
-                          </svg>
-                          <span>Pay Now</span>
-                        </>
-                      )}
-                    </button>
-                    <p className="text-[10px] text-white/15">Secured by Razorpay</p>
-                  </div>
-                )}
-                */}
               </ResultCard>
             </div>
 
@@ -631,7 +456,7 @@ export default function HomePage() {
             <span className="text-sm font-semibold text-white/50">HookGen</span>
           </div>
           <p className="text-xs text-white/20 text-center">
-            Made with ❤️ in India · ₹99 per video · Contact:{" "}
+            Made with ❤️ in India · Contact:{" "}
             <a
               href="mailto:hello@hookgen.in"
               className="text-amber-400/50 hover:text-amber-400/80 transition-colors underline underline-offset-2"
